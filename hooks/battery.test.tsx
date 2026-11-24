@@ -22,14 +22,15 @@ test('the band shows what is left on every surface', async ($, on) => {
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     expect((await ui.find({ type: 'Text', text: /^\d+%$/ }))?.text).toBe('70%')
+    // Even at 15% left the weekly battery stays green, like a laptop's.
+    expect((await ui.find({ type: 'Text', text: /^██$/ }))?.props.color).toBe('green')
     await ui.unmount()
   }
 })
 
-test('/battery prints both batteries', async ($, on) => {
+test('/battery prints both batteries on one line', async ($, on) => {
   mock.clock(on, { now: 1000 })
   on('session.usage', () => ({ value: { startedAt: 0, context: {}, rateLimits: LIMITS } }) as any)
   const r = await $.command.run({ command: 'battery', args: '' } as any)
-  expect(r.text).toContain('일일 [███████░░░] 70%')
-  expect(r.text).toContain('주간 [██░░░░░░░░] 15%')
+  expect(r.text).toBe('일일 🟩🟩🟩🟩⬜ 70%  ·  주간 🟩⬜⬜⬜⬜ 15%')
 })

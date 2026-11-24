@@ -7,11 +7,9 @@ const reading = atom({ plugin: 'usage-battery', key: 'reading' } as const, null)
 
 const CELLS = 10
 
-function colorFor(left: number): string {
-  if (left > 50) return 'green'
-  if (left > 20) return 'yellow'
-  return 'red'
-}
+// Like a laptop's battery: what is left is always green.
+const COLOR = 'green'
+const TEXT_CELLS = 5
 
 function resetLabel(iso: string | undefined, now: number): string {
   if (!iso) return ''
@@ -24,22 +22,20 @@ function resetLabel(iso: string | undefined, now: number): string {
 }
 
 function bar(label: string, limit: Limit | undefined, now: number): string {
-  if (!limit) return `${label} [ — ] 아직 데이터 없음`
+  if (!limit) return `${label} —`
   const left = Math.max(0, Math.min(100, 100 - limit.percentUsed))
-  const filled = Math.round((left / 100) * CELLS)
-  const dot = left > 50 ? '🟢' : left > 20 ? '🟡' : '🔴'
-  return `${dot} ${label} [${'█'.repeat(filled)}${'░'.repeat(CELLS - filled)}] ${Math.round(left)}%${resetLabel(limit.resetsAt, now)}`
+  const filled = Math.round((left / 100) * TEXT_CELLS)
+  return `${label} ${'🟩'.repeat(filled)}${'⬜'.repeat(TEXT_CELLS - filled)} ${Math.round(left)}%${resetLabel(limit.resetsAt, now)}`
 }
 
 function summary(r: Reading | null): string {
   const limits = r?.limits ?? []
   const now = r?.at ?? 0
-  const lines = [
+  if (limits.length === 0) return '🔋 아직 데이터 없음 (Pro/Max 구독에서 첫 응답 뒤 표시)'
+  return [
     bar('일일', limits.find(l => l.kind === 'five_hour'), now),
     bar('주간', limits.find(l => l.kind === 'seven_day'), now),
-  ]
-  if (limits.length === 0) lines.push('(Pro/Max 구독에서 첫 응답을 받은 뒤에 표시돼요)')
-  return lines.join('\n')
+  ].join('  ·  ')
 }
 
 async function refresh($: EngineInterface): Promise<void> {
@@ -91,7 +87,7 @@ export const register: Register = on => {
       }
       const left = Math.max(0, Math.min(100, 100 - limit.percentUsed))
       const filled = Math.round((left / 100) * CELLS)
-      const color = colorFor(left)
+      const color = COLOR
       return (
         <Box key={label} flexDirection="row" marginRight={2}>
           <Text>{label} </Text>
