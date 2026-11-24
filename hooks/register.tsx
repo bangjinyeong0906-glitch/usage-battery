@@ -5,11 +5,13 @@ import type { Limit, Reading } from '../types'
 
 const reading = atom({ plugin: 'usage-battery', key: 'reading' } as const, null)
 
-const CELLS = 10
+// Width of the bar, in columns.
+const BAR = 16
 
 // Like a laptop's battery: what is left is always green.
 const COLOR = 'green'
-const TEXT_CELLS = 5
+const EMPTY = 'gray'
+const TEXT_CELLS = 10
 
 function resetLabel(iso: string | undefined, now: number): string {
   if (!iso) return ''
@@ -25,7 +27,7 @@ function bar(label: string, limit: Limit | undefined, now: number): string {
   if (!limit) return `${label} —`
   const left = Math.max(0, Math.min(100, 100 - limit.percentUsed))
   const filled = Math.round((left / 100) * TEXT_CELLS)
-  return `${label} ${'🟩'.repeat(filled)}${'⬜'.repeat(TEXT_CELLS - filled)} ${Math.round(left)}%${resetLabel(limit.resetsAt, now)}`
+  return `${label} ${'█'.repeat(filled)}${'░'.repeat(TEXT_CELLS - filled)} ${Math.round(left)}%${resetLabel(limit.resetsAt, now)}`
 }
 
 function summary(r: Reading | null): string {
@@ -46,6 +48,13 @@ async function refresh($: EngineInterface): Promise<void> {
     at: now,
   }
   await update($, reading, () => next)
+  show($, next)
+}
+
+// Pin the summary under the prompt so it shows without typing /battery.
+function show($: EngineInterface, r: Reading | null): void {
+  if (!r || r.limits.length === 0) return
+  $.ui.status(`🔋 ${summary(r)}`)
 }
 
 export const register: Register = on => {
@@ -63,10 +72,12 @@ export const register: Register = on => {
 
   on('session.measure', async ($, e, next) => {
     const now = await $.clock.now()
-    await update($, reading, () => ({
+    const r: Reading = {
       limits: e.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed, resetsAt: r.resetsAt })),
       at: now,
-    }))
+    }
+    await update($, reading, () => r)
+    show($, r)
     return next(e)
   })
 
@@ -86,16 +97,15 @@ export const register: Register = on => {
         )
       }
       const left = Math.max(0, Math.min(100, 100 - limit.percentUsed))
-      const filled = Math.round((left / 100) * CELLS)
-      const color = COLOR
+      const filled = Math.round((left / 100) * BAR)
       return (
         <Box key={label} flexDirection="row" marginRight={2}>
           <Text>{label} </Text>
-          <Text>[</Text>
-          <Text color={color}>{'█'.repeat(filled)}</Text>
-          <Text dimColor>{'░'.repeat(CELLS - filled)}</Text>
-          <Text>]▌ </Text>
-          <Text color={color} bold>{Math.round(left)}%</Text>
+          <Box flexDirection="row" width={BAR} height={1} flexShrink={0} backgroundColor={EMPTY}>
+            {filled > 0 ? <Box key={`${label}-fill`} width={filled} height={1} backgroundColor={COLOR} /> : null}
+          </Box>
+          <Text> </Text>
+          <Text color={COLOR} bold>{Math.round(left)}%</Text>
           <Text dimColor>{resetLabel(limit.resetsAt, now)}</Text>
         </Box>
       )
