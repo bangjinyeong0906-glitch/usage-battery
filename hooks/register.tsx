@@ -23,6 +23,25 @@ function resetLabel(iso: string | undefined, now: number): string {
   return h > 0 ? ` ↻${h}h${m}m` : ` ↻${m}m`
 }
 
+function bar(label: string, limit: Limit | undefined, now: number): string {
+  if (!limit) return `${label} [ — ] 아직 데이터 없음`
+  const left = Math.max(0, Math.min(100, 100 - limit.percentUsed))
+  const filled = Math.round((left / 100) * CELLS)
+  const dot = left > 50 ? '🟢' : left > 20 ? '🟡' : '🔴'
+  return `${dot} ${label} [${'█'.repeat(filled)}${'░'.repeat(CELLS - filled)}] ${Math.round(left)}%${resetLabel(limit.resetsAt, now)}`
+}
+
+function summary(r: Reading | null): string {
+  const limits = r?.limits ?? []
+  const now = r?.at ?? 0
+  const lines = [
+    bar('일일', limits.find(l => l.kind === 'five_hour'), now),
+    bar('주간', limits.find(l => l.kind === 'seven_day'), now),
+  ]
+  if (limits.length === 0) lines.push('(Pro/Max 구독에서 첫 응답을 받은 뒤에 표시돼요)')
+  return lines.join('\n')
+}
+
 async function refresh($: EngineInterface): Promise<void> {
   const u = await $.session.usage()
   const now = await $.clock.now()
@@ -36,8 +55,14 @@ async function refresh($: EngineInterface): Promise<void> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
+    await $.command.register({ name: 'battery', description: '일일·주간 사용량을 배터리로 보여줘요' })
     await refresh($)
     return r
+  })
+
+  on('command.run', { command: 'battery' }, async $ => {
+    await refresh($)
+    return { text: summary(await read($, reading)), isTextDisplayOnly: true }
   })
 
   on('session.measure', async ($, e, next) => {
@@ -93,7 +118,7 @@ export const register: Register = on => {
           label="⟳ 새로고침"
           onPress={async () => {
             await refresh($)
-            $.ui.toast('사용량을 새로고침했어요')
+            $.ui.toast(summary(await read($, reading)))
           }}
         />
       </Box>
