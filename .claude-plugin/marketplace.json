@@ -1,0 +1,5 @@
+{
+  "name": "usage-battery",
+  "owner": { "name": "bangjinyeong0906-glitch" },
+  "plugins": [{ "name": "usage-battery", "source": "./" }]
+}
