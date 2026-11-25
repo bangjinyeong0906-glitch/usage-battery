@@ -16,6 +16,7 @@ const LIMITS = [
 
 test('the band shows what is left on every surface', async ($, on) => {
   mock.clock(on, { now: 1000 })
+  on('ui.status', () => ({ value: undefined }) as any)
   on('session.measure', () => ({ changed: ['rateLimits'] }) as any)
   await $.session.measure({ context: {}, rateLimits: LIMITS, changed: ['rateLimits'] } as any)
 
@@ -23,14 +24,26 @@ test('the band shows what is left on every surface', async ($, on) => {
     const ui = await $.ui.mount({ ...BAND, surface })
     expect((await ui.find({ type: 'Text', text: /^\d+%$/ }))?.text).toBe('70%')
     // Even at 15% left the weekly battery stays green, like a laptop's.
-    expect((await ui.find({ type: 'Text', text: /^██$/ }))?.props.color).toBe('green')
+    const fill = await ui.find({ key: '주간-fill' })
+    expect(fill?.props.width).toBe(2)
+    expect(fill?.props.backgroundColor).toBe('green')
     await ui.unmount()
   }
+})
+
+test('the summary is pinned under the prompt without typing /battery', async ($, on) => {
+  mock.clock(on, { now: 1000 })
+  const lines: unknown[] = []
+  on('ui.status', (_$, e: any) => { lines.push(e.text); return { value: undefined } as any })
+  on('session.measure', () => ({ changed: ['rateLimits'] }) as any)
+  await $.session.measure({ context: {}, rateLimits: LIMITS, changed: ['rateLimits'] } as any)
+  expect(lines).toEqual(['🔋 일일 ███████░░░ 70%  ·  주간 ██░░░░░░░░ 15%'])
 })
 
 test('/battery prints both batteries on one line', async ($, on) => {
   mock.clock(on, { now: 1000 })
   on('session.usage', () => ({ value: { startedAt: 0, context: {}, rateLimits: LIMITS } }) as any)
+  on('ui.status', () => ({ value: undefined }) as any)
   const r = await $.command.run({ command: 'battery', args: '' } as any)
-  expect(r.text).toBe('일일 🟩🟩🟩🟩⬜ 70%  ·  주간 🟩⬜⬜⬜⬜ 15%')
+  expect(r.text).toBe('일일 ███████░░░ 70%  ·  주간 ██░░░░░░░░ 15%')
 })
